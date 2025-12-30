@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A511" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="Material" representedClassName="Material" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="content" attributeType="String" optional="YES"/>
+        <attribute name="url" attributeType="String" optional="YES"/>
+        <attribute name="filePath" attributeType="String" optional="YES"/>
+        <attribute name="materialType" attributeType="String"/>
+        <attribute name="status" attributeType="String"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+        <relationship name="tags" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Tag" inverseName="materials" inverseEntity="Tag"/>
+        <relationship name="annotations" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Annotation" inverseName="material" inverseEntity="Annotation"/>
+        <relationship name="researches" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Research" inverseName="materials" inverseEntity="Research"/>
+        <relationship name="insights" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Insight" inverseName="material" inverseEntity="Insight"/>
+    </entity>
+    <entity name="Annotation" representedClassName="Annotation" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="content" attributeType="String"/>
+        <attribute name="position" attributeType="String" optional="YES"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+        <relationship name="material" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Material" inverseName="annotations" inverseEntity="Material"/>
+    </entity>
+    <entity name="Tag" representedClassName="Tag" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="category" attributeType="String" optional="YES"/>
+        <attribute name="color" attributeType="String" optional="YES"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+        <relationship name="materials" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Material" inverseName="tags" inverseEntity="Material"/>
+        <relationship name="researches" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Research" inverseName="tags" inverseEntity="Research"/>
+        <relationship name="insights" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Insight" inverseName="tags" inverseEntity="Insight"/>
+    </entity>
+    <entity name="Research" representedClassName="Research" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="description" attributeType="String" optional="YES"/>
+        <attribute name="status" attributeType="String"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+        <attribute name="completedAt" attributeType="Date" optional="YES"/>
+        <relationship name="materials" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Material" inverseName="researches" inverseEntity="Material"/>
+        <relationship name="steps" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ResearchStepEntity" inverseName="research" inverseEntity="ResearchStepEntity"/>
+        <relationship name="tags" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Tag" inverseName="researches" inverseEntity="Tag"/>
+        <relationship name="insights" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Insight" inverseName="research" inverseEntity="Insight"/>
+    </entity>
+    <entity name="ResearchStepEntity" representedClassName="ResearchStepEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="description" attributeType="String" optional="YES"/>
+        <attribute name="stepType" attributeType="String"/>
+        <attribute name="status" attributeType="String"/>
+        <attribute name="order" attributeType="Integer 32"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+        <attribute name="completedAt" attributeType="Date" optional="YES"/>
+        <relationship name="research" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Research" inverseName="steps" inverseEntity="Research"/>
+    </entity>
+    <entity name="Insight" representedClassName="Insight" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="content" attributeType="String"/>
+        <attribute name="insightType" attributeType="String"/>
+        <attribute name="confidence" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+        <relationship name="material" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Material" inverseName="insights" inverseEntity="Material"/>
+        <relationship name="research" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Research" inverseName="insights" inverseEntity="Research"/>
+        <relationship name="tags" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Tag" inverseName="insights" inverseEntity="Tag"/>
+    </entity>
+    <entity name="UserSettings" representedClassName="UserSettings" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="deepSeekAPIKey" attributeType="String" optional="YES"/>
+        <attribute name="deepSeekModelName" attributeType="String"/>
+        <attribute name="userAPIMode" attributeType="String"/>
+        <attribute name="enableAutoFallback" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="monthlyTokenLimit" attributeType="Integer 64" defaultValueString="1000000" usesScalarValueType="YES"/>
+        <attribute name="singleRequestLimit" attributeType="Integer 64" defaultValueString="2000" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+    </entity>
+    <entity name="UsageStatistics" representedClassName="UsageStatistics" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="date" attributeType="Date"/>
+        <attribute name="tokenCount" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="requestCount" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date"/>
+        <attribute name="updatedAt" attributeType="Date"/>
+    </entity>
+    <elements>
+        <element name="Material" positionX="-63" positionY="-18" width="128" height="328"/>
+        <element name="Annotation" positionX="450" positionY="-18" width="128" height="180"/>
+        <element name="Tag" positionX="-63" positionY="450" width="128" height="180"/>
+        <element name="Research" positionX="450" positionY="450" width="128" height="248"/>
+        <element name="ResearchStepEntity" positionX="900" positionY="450" width="128" height="248"/>
+        <element name="Insight" positionX="900" positionY="-18" width="128" height="180"/>
+        <element name="UserSettings" positionX="-63" positionY="900" width="128" height="248"/>
+        <element name="UsageStatistics" positionX="450" positionY="900" width="128" height="180"/>
+    </elements>
+</model>

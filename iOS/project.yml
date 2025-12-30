@@ -1,0 +1,77 @@
+name: FORME
+options:
+  bundleIdPrefix: com.forme
+  deploymentTarget:
+    iOS: 15.0
+  xcodeVersion: 15.0
+  groupSortPosition: top
+  generateEmptyDirectories: true
+  createIntermediateGroups: true
+
+packages:
+  Alamofire:
+    url: https://github.com/Alamofire/Alamofire.git
+    from: 5.8.0
+  SnapKit:
+    url: https://github.com/SnapKit/SnapKit.git
+    from: 5.7.0
+  Kingfisher:
+    url: https://github.com/onevcat/Kingfisher.git
+    from: 7.10.0
+  Markdown:
+    url: https://github.com/swiftlang/swift-markdown.git
+    from: 0.7.3
+  LookinServer:
+    url: https://github.com/QMUI/LookinServer/
+    majorVersion: 1.2.8
+
+targets:
+  FORME:
+    type: application
+    platform: iOS
+    sources:
+      - path: FORME/FORME
+        excludes:
+          - "**/*.plist"
+    resources:
+      - path: FORME/FORME/Resources
+    info:
+      path: FORME/FORME/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: FORME
+        CFBundleShortVersionString: 1.0.0
+        CFBundleVersion: 1
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+    dependencies:
+      - package: Alamofire
+      - package: SnapKit
+      - package: Kingfisher
+      - package: Markdown
+        # product: swift-markdown
+      - package: LookinServer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.forme.app
+        TARGETED_DEVICE_FAMILY: 1
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+  FORMETests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FORME/FORMETests
+    dependencies:
+      - target: FORME
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.forme.app.tests
+        TEST_TARGET_NAME: FORME

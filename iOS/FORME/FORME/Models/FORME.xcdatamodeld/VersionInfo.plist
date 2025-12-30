@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSManagedObjectModel_CurrentVersionName</key>
+	<string>FORME.xcdatamodel</string>
+	<key>NSManagedObjectModel_VersionHashes</key>
+	<dict>
+		<key>Annotation</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+		<key>Insight</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+		<key>Material</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+		<key>Research</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+		<key>ResearchStepEntity</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+		<key>Tag</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+		<key>UsageStatistics</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+		<key>UserSettings</key>
+		<data>
+		YI0R6G3d7kq5J7q4t7q4t7q4t7q4t7q4t7q4t7q4t7o=
+		</data>
+	</dict>
+</dict>
+</plist>
