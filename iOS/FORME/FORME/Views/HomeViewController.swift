@@ -64,19 +64,18 @@ class HomeViewController: UIViewController {
         return label
     }()
 
-    private let conversationScrollView: UIScrollView = {
-        let scrollView = UIScrollView()
-        scrollView.showsVerticalScrollIndicator = true
-        scrollView.alwaysBounceVertical = true
-        return scrollView
-    }()
+    private let conversationScrollView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .vertical
+        layout.minimumLineSpacing = 16
+        layout.minimumInteritemSpacing = 0
 
-    private let conversationStackView: UIStackView = {
-        let stackView = UIStackView()
-        stackView.axis = .vertical
-        stackView.spacing = 16
-        stackView.alignment = .fill
-        return stackView
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.showsVerticalScrollIndicator = true
+        collectionView.alwaysBounceVertical = true
+        collectionView.backgroundColor = .clear
+        collectionView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 0)
+        return collectionView
     }()
 
     private let inputContainerView: UIView = {
@@ -166,7 +165,6 @@ class HomeViewController: UIViewController {
         conversationContainerView.addSubview(conversationTitleLabel)
         conversationContainerView.addSubview(conversationScrollView)
         conversationContainerView.addSubview(emptyConversationLabel)
-        conversationScrollView.addSubview(conversationStackView)
 
         view.addSubview(inputContainerView)
         inputContainerView.addSubview(inputTextView)
@@ -174,6 +172,10 @@ class HomeViewController: UIViewController {
 
         researchCollectionView.delegate = self
         researchCollectionView.dataSource = self
+
+        conversationScrollView.delegate = self
+        conversationScrollView.dataSource = self
+        conversationScrollView.register(MessageCollectionViewCell.self, forCellWithReuseIdentifier: "MessageCell")
 
         inputTextView.delegate = self
     }
@@ -206,11 +208,6 @@ class HomeViewController: UIViewController {
             make.leading.trailing.bottom.equalToSuperview()
         }
 
-        conversationStackView.snp.makeConstraints { make in
-            make.top.bottom.equalToSuperview()
-            make.width.equalTo(conversationScrollView).offset(-16)
-            make.centerX.equalToSuperview()
-        }
 
         emptyConversationLabel.snp.makeConstraints { make in
             make.center.equalTo(conversationScrollView)
@@ -242,12 +239,7 @@ class HomeViewController: UIViewController {
 
     private func loadConversation() {
         emptyConversationLabel.isHidden = !messages.isEmpty
-        conversationStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-
-        for message in messages {
-            let messageView = createMessageView(message: message)
-            conversationStackView.addArrangedSubview(messageView)
-        }
+        conversationScrollView.reloadData()
 
         DispatchQueue.main.async {
             self.scrollToBottom()
@@ -298,8 +290,9 @@ class HomeViewController: UIViewController {
     }
 
     private func scrollToBottom() {
-        let bottomOffset = CGPoint(x: 0, y: conversationScrollView.contentSize.height - conversationScrollView.bounds.size.height + conversationScrollView.contentInset.bottom)
-        conversationScrollView.setContentOffset(bottomOffset, animated: true)
+        guard !messages.isEmpty else { return }
+        let lastIndexPath = IndexPath(item: messages.count - 1, section: 0)
+        conversationScrollView.scrollToItem(at: lastIndexPath, at: .bottom, animated: true)
     }
 
     @objc private func sendButtonTapped() {
@@ -529,28 +522,55 @@ class HomeViewController: UIViewController {
 
 extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return researchItems.count
+        if collectionView == researchCollectionView {
+            return researchItems.count
+        } else { // conversationScrollView (messages collection view)
+            return messages.count
+        }
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ResearchCell", for: indexPath) as! ResearchCell
-        let item = researchItems[indexPath.item]
-        cell.configure(with: item.title, color: item.color)
-        return cell
+        if collectionView == researchCollectionView {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ResearchCell", for: indexPath) as! ResearchCell
+            let item = researchItems[indexPath.item]
+            cell.configure(with: item.title, color: item.color)
+            return cell
+        } else { // conversationScrollView (messages collection view)
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "MessageCell", for: indexPath) as! MessageCollectionViewCell
+            let message = messages[indexPath.item]
+            cell.configure(with: message)
+            return cell
+        }
     }
 
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        return CGSize(width: 64, height: 64)
+        if collectionView == researchCollectionView {
+            return CGSize(width: 64, height: 64)
+        } else { // conversationScrollView (messages collection view)
+            let message = messages[indexPath.item]
+            let maxWidth: CGFloat = collectionView.frame.width - 32 // 左右各16点边距
+            let bubbleMaxWidth: CGFloat = message.isUser ? 320 : 360
+            let contentWidth: CGFloat = min(maxWidth, bubbleMaxWidth) - 24 // 减去气泡内边距（12+12）
+
+            // 计算内容高度
+            let contentView = MessageContentView(message: message)
+            let estimatedSize = contentView.sizeThatFits(CGSize(width: contentWidth, height: .greatestFiniteMagnitude))
+
+            return CGSize(width: collectionView.frame.width, height: estimatedSize.height + 24) // 加上气泡内边距（12+12）
+        }
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let item = researchItems[indexPath.item]
-        let alert = UIAlertController(title: "开始研究", message: "是否开始研究：\(item.title)", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        alert.addAction(UIAlertAction(title: "开始", style: .default) { _ in
-            // TODO: 跳转到具体研究
-        })
-        present(alert, animated: true)
+        if collectionView == researchCollectionView {
+            let item = researchItems[indexPath.item]
+            let alert = UIAlertController(title: "开始研究", message: "是否开始研究：\(item.title)", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+            alert.addAction(UIAlertAction(title: "开始", style: .default) { _ in
+                // TODO: 跳转到具体研究
+            })
+            present(alert, animated: true)
+        }
+        // 消息集合视图不需要选择处理
     }
 }
 
@@ -624,9 +644,66 @@ class ResearchCell: UICollectionViewCell {
     }
 }
 
+class MessageCollectionViewCell: UICollectionViewCell {
+    private var message: Message?
+    private let bubbleView = UIView()
+    private var messageContentView: MessageContentView?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupUI()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setupUI() {
+        contentView.addSubview(bubbleView)
+        bubbleView.layer.cornerRadius = 12
+        bubbleView.layer.masksToBounds = true
+    }
+
+    func configure(with message: Message) {
+        self.message = message
+
+        // 移除旧的内容视图
+        messageContentView?.removeFromSuperview()
+
+        // 创建新的内容视图
+        let newContentView = MessageContentView(message: message)
+        bubbleView.addSubview(newContentView)
+        self.messageContentView = newContentView
+
+        // 设置气泡颜色
+        if message.isUser {
+            bubbleView.backgroundColor = UIColor(red: 0.07, green: 0.21, blue: 0.36, alpha: 1.0)
+        } else {
+            bubbleView.backgroundColor = .secondarySystemBackground
+        }
+
+        // 设置约束
+        bubbleView.snp.remakeConstraints { make in
+            if message.isUser {
+                make.trailing.equalToSuperview().offset(-8)
+                make.width.lessThanOrEqualTo(320)
+            } else {
+                make.leading.equalToSuperview().offset(8)
+                make.width.lessThanOrEqualTo(360)
+            }
+            make.top.bottom.equalToSuperview()
+            make.height.greaterThanOrEqualTo(50)
+        }
+
+        newContentView.snp.remakeConstraints { make in
+            make.edges.equalToSuperview().inset(12)
+        }
+    }
+}
+
 class MessageContentView: UIView {
     private var message: Message
-    private let contentLabel = UILabel()
+    private let contentTextView = UITextView()
 
     init(message: Message) {
         self.message = message
@@ -639,15 +716,21 @@ class MessageContentView: UIView {
     }
 
     private func setupUI() {
-        contentLabel.numberOfLines = 0
-        contentLabel.textColor = message.isUser ? .white : .label
-        contentLabel.lineBreakMode = .byCharWrapping
-//        contentLabel.textAlignment = message.isUser ? .right : .left
+        contentTextView.isEditable = false
+        contentTextView.isScrollEnabled = false
+        contentTextView.backgroundColor = .clear
+        contentTextView.textContainerInset = .zero
+        contentTextView.textContainer.lineFragmentPadding = 0
+        contentTextView.contentInset = .zero
+        contentTextView.isSelectable = true
+        contentTextView.dataDetectorTypes = .link
+        contentTextView.textColor = message.isUser ? .white : .label
+//        contentTextView.textAlignment = message.isUser ? .right : .left
 
         updateContentLabel()
 
-        addSubview(contentLabel)
-        contentLabel.snp.makeConstraints { make in
+        addSubview(contentTextView)
+        contentTextView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
     }
@@ -659,7 +742,7 @@ class MessageContentView: UIView {
 
     private func updateContentLabel() {
         let attributedText = parseMarkdown(message.content, isUser: message.isUser)
-        contentLabel.attributedText = attributedText
+        contentTextView.attributedText = attributedText
     }
 
     private func parseMarkdown(_ text: String, isUser: Bool) -> NSAttributedString? {
@@ -734,6 +817,9 @@ class MessageContentView: UIView {
         }
     }
 
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        return contentTextView.sizeThatFits(size)
+    }
 }
 
 extension UITextView {
