@@ -1,17 +1,25 @@
 import UIKit
 import SnapKit
 import Markdown
+import Alamofire
 
 struct ResearchItem {
     let title: String
     let color: UIColor
 }
 
-struct Message {
+class Message {
     let id: String
-    let content: String
+    var content: String
     let isUser: Bool
     let timestamp: Date
+
+    init(id: String, content: String, isUser: Bool, timestamp: Date) {
+        self.id = id
+        self.content = content
+        self.isUser = isUser
+        self.timestamp = timestamp
+    }
 }
 
 class HomeViewController: UIViewController {
@@ -200,7 +208,7 @@ class HomeViewController: UIViewController {
 
         conversationStackView.snp.makeConstraints { make in
             make.top.bottom.equalToSuperview()
-            make.width.equalTo(conversationScrollView).offset(-40)
+            make.width.equalTo(conversationScrollView).offset(-16)
             make.centerX.equalToSuperview()
         }
 
@@ -266,9 +274,9 @@ class HomeViewController: UIViewController {
 
         if message.isUser {
             bubbleView.snp.makeConstraints { make in
-                make.trailing.equalToSuperview().offset(-20)
+                make.trailing.equalToSuperview().offset(-8)
                 make.top.bottom.equalToSuperview()
-                make.width.lessThanOrEqualTo(280)
+                make.width.lessThanOrEqualTo(320)
             }
 
             contentView.snp.makeConstraints { make in
@@ -276,9 +284,9 @@ class HomeViewController: UIViewController {
             }
         } else {
             bubbleView.snp.makeConstraints { make in
-                make.leading.equalToSuperview().offset(20)
+                make.leading.equalToSuperview().offset(8)
                 make.top.bottom.equalToSuperview()
-                make.width.lessThanOrEqualTo(280)
+                make.width.lessThanOrEqualTo(360)
             }
 
             contentView.snp.makeConstraints { make in
@@ -298,6 +306,7 @@ class HomeViewController: UIViewController {
         guard let text = inputTextView.text?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else { return }
 
+        // 添加用户消息
         let userMessage = Message(
             id: UUID().uuidString,
             content: text,
@@ -306,34 +315,92 @@ class HomeViewController: UIViewController {
         )
         messages.append(userMessage)
         inputTextView.text = ""
+
+        // 添加AI消息占位符（显示正在输入）
+        let aiMessageId = UUID().uuidString
+        let aiMessage = Message(
+            id: aiMessageId,
+            content: "正在思考...",
+            isUser: false,
+            timestamp: Date()
+        )
+        messages.append(aiMessage)
         loadConversation()
 
-        // 调用真实AI回复
-        Task {
-            do {
-                let aiResponse = try await self.generateAIResponse(to: text)
-                let aiMessage = Message(
-                    id: UUID().uuidString,
-                    content: aiResponse,
-                    isUser: false,
-                    timestamp: Date()
-                )
-                await MainActor.run {
-                    self.messages.append(aiMessage)
-                    self.loadConversation()
+        // 检查DeepSeek服务是否配置
+        guard DeepSeekService.shared.isConfigured else {
+            print("DeepSeek未配置，使用本地分析")
+            fallbackToLocalAnalysis(question: text, aiMessageId: aiMessageId)
+            return
+        }
+
+        // 准备消息历史（排除当前的AI占位符消息）
+        // 获取用户消息和之前的AI消息（最多最近10条）
+        let contextMessages = messages.filter { $0.id != aiMessageId }.suffix(10)
+        let chatMessages: [ChatMessage] = contextMessages.map { message in
+            let role: ChatMessage.Role = message.isUser ? .user : .assistant
+            return ChatMessage(role: role, content: message.content)
+        }
+
+        // 如果没有消息历史，至少包含用户消息
+        let finalMessages = chatMessages.isEmpty ?
+            [ChatMessage(role: .user, content: text)] : chatMessages
+
+        // 添加系统消息作为第一条消息（如果不存在）
+        var allMessages = finalMessages
+        if !allMessages.contains(where: { $0.role == .system }) {
+            let systemMessage = ChatMessage(
+                role: .system,
+                content: "你是一个专业的研究助手，擅长回答各种研究问题并提供有价值的见解。请以友好、专业的方式回应用户的问题，使用Markdown格式组织你的回答。"
+            )
+            allMessages.insert(systemMessage, at: 0)
+        }
+
+        // 使用流式API获取回复
+        DeepSeekService.shared.chatCompletionStream(
+            messages: allMessages,
+            maxTokens: 2000,
+            temperature: 0.7,
+            onChunk: { [weak self] accumulatedContent in
+                guard let self = self else { return }
+
+                // 更新AI消息内容
+                DispatchQueue.main.async {
+                    if let index = self.messages.firstIndex(where: { $0.id == aiMessageId }) {
+                        self.messages[index].content = accumulatedContent
+                        self.loadConversation()
+                    }
                 }
-            } catch {
-                print("AI回复失败: \(error)")
-                // 回退到本地分析
-                let fallbackResponse = await self.generateFallbackResponse(to: text)
-                let aiMessage = Message(
-                    id: UUID().uuidString,
-                    content: fallbackResponse,
-                    isUser: false,
-                    timestamp: Date()
-                )
-                await MainActor.run {
-                    self.messages.append(aiMessage)
+            },
+            onCompletion: { [weak self] result in
+                guard let self = self else { return }
+
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let finalContent):
+                        // 更新最终内容
+                        if let index = self.messages.firstIndex(where: { $0.id == aiMessageId }) {
+                            self.messages[index].content = finalContent
+                            self.loadConversation()
+                        }
+
+                    case .failure(let error):
+                        print("DeepSeek流式API失败: \(error)")
+                        // 回退到本地分析
+                        self.fallbackToLocalAnalysis(question: text, aiMessageId: aiMessageId)
+                    }
+                }
+            }
+        )
+    }
+
+    private func fallbackToLocalAnalysis(question: String, aiMessageId: String) {
+        Task {
+            let fallbackResponse = await self.generateFallbackResponse(to: question)
+
+            await MainActor.run {
+                if let index = self.messages.firstIndex(where: { $0.id == aiMessageId }) {
+                    self.messages[index].content = fallbackResponse
                     self.loadConversation()
                 }
             }
@@ -558,7 +625,7 @@ class ResearchCell: UICollectionViewCell {
 }
 
 class MessageContentView: UIView {
-    private let message: Message
+    private var message: Message
     private let contentLabel = UILabel()
 
     init(message: Message) {
@@ -574,14 +641,25 @@ class MessageContentView: UIView {
     private func setupUI() {
         contentLabel.numberOfLines = 0
         contentLabel.textColor = message.isUser ? .white : .label
+        contentLabel.lineBreakMode = .byCharWrapping
+//        contentLabel.textAlignment = message.isUser ? .right : .left
 
-        let attributedText = parseMarkdown(message.content, isUser: message.isUser)
-        contentLabel.attributedText = attributedText
+        updateContentLabel()
 
         addSubview(contentLabel)
         contentLabel.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
+    }
+
+    func updateMessageContent(_ newContent: String) {
+        message.content = newContent
+        updateContentLabel()
+    }
+
+    private func updateContentLabel() {
+        let attributedText = parseMarkdown(message.content, isUser: message.isUser)
+        contentLabel.attributedText = attributedText
     }
 
     private func parseMarkdown(_ text: String, isUser: Bool) -> NSAttributedString? {

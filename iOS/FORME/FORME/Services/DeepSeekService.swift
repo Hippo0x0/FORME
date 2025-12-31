@@ -30,9 +30,9 @@ class DeepSeekService {
 
     func chatCompletion(
         messages: [ChatMessage],
-        maxTokens: Int? = nil,
+        maxTokens: Int32? = nil,
         temperature: Double = 0.7,
-        stream: Bool = false
+        stream: Bool = true
     ) async throws -> ChatCompletionResponse {
         guard let apiKey = apiKey else {
             throw DeepSeekError.apiKeyNotConfigured
@@ -44,24 +44,24 @@ class DeepSeekService {
             "Content-Type": "application/json"
         ]
 
-        let parameters: [String: Any] = [
-            "model": model,
-            "messages": messages.map { $0.toDictionary() },
-            "max_tokens": maxTokens ?? UserSettings.current.singleRequestLimit,
-            "temperature": temperature,
-            "stream": stream
-        ]
+        let request = ChatCompletionRequest(
+            model: model,
+            messages: messages,
+            maxTokens: maxTokens ?? UserSettings.current.singleRequestLimit,
+            temperature: temperature,
+            stream: stream
+        )
 
         return try await withCheckedThrowingContinuation { continuation in
-            AF.request(url, method: .post, parameters: parameters, encoding: JSONEncoding.default, headers: headers)
+            AF.request(url, method: .post, parameters: request, encoder: JSONParameterEncoder.default, headers: headers)
                 .validate()
                 .responseDecodable(of: ChatCompletionResponse.self) { response in
                     switch response.result {
                     case .success(let completionResponse):
                         // 记录token使用量
-                        if let usage = completionResponse.usage {
-                            DataStoreService.shared.recordDeepSeekTokenUsage(tokens: usage.totalTokens)
-                        }
+//                        if let usage = completionResponse.usage {
+//                            DataStoreService.shared.recordDeepSeekTokenUsage(tokens: usage.totalTokens)
+//                        }
                         continuation.resume(returning: completionResponse)
                     case .failure(let error):
                         continuation.resume(throwing: self.handleError(error))
@@ -75,7 +75,7 @@ class DeepSeekService {
     func analyzeText(
         text: String,
         analysisType: AnalysisType,
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async throws -> AnalysisResult {
         let systemPrompt = analysisType.systemPrompt
         let userPrompt = analysisType.userPrompt(for: text)
@@ -105,7 +105,7 @@ class DeepSeekService {
     func analyzeMaterial(
         material: Material,
         analysisType: AnalysisType,
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async throws -> AnalysisResult {
         guard let content = material.content else {
             throw DeepSeekError.invalidInput
@@ -121,7 +121,7 @@ class DeepSeekService {
     func analyzeMultipleMaterials(
         materials: [Material],
         analysisType: AnalysisType,
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async throws -> AnalysisResult {
         let combinedText = materials.compactMap { $0.content }.joined(separator: "\n\n---\n\n")
         return try await analyzeText(
@@ -134,7 +134,7 @@ class DeepSeekService {
     func answerQuestion(
         question: String,
         context: String? = nil,
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async throws -> String {
         var messages: [ChatMessage] = []
 
@@ -160,7 +160,7 @@ class DeepSeekService {
     func generateSummary(
         text: String,
         length: SummaryLength = .medium,
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async throws -> String {
         let analysisType = AnalysisType.summary(length: length)
         let result = try await analyzeText(
@@ -173,7 +173,7 @@ class DeepSeekService {
 
     func findConnections(
         materials: [Material],
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async throws -> String {
         let analysisType = AnalysisType.connection
         let result = try await analyzeMultipleMaterials(
@@ -186,7 +186,7 @@ class DeepSeekService {
 
     func generateInsights(
         material: Material,
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async throws -> [String] {
         let analysisType = AnalysisType.insight
         let result = try await analyzeMaterial(
@@ -290,8 +290,8 @@ enum DeepSeekError: Error, LocalizedError {
     }
 }
 
-struct ChatMessage {
-    enum Role: String {
+struct ChatMessage: Codable {
+    enum Role: String, Codable {
         case system
         case user
         case assistant
@@ -299,12 +299,21 @@ struct ChatMessage {
 
     let role: Role
     let content: String
+}
 
-    func toDictionary() -> [String: Any] {
-        return [
-            "role": role.rawValue,
-            "content": content
-        ]
+struct ChatCompletionRequest: Encodable {
+    let model: String
+    let messages: [ChatMessage]
+    let maxTokens: Int32?
+    let temperature: Double
+    let stream: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case maxTokens = "max_tokens"
+        case temperature
+        case stream
     }
 }
 
@@ -429,6 +438,134 @@ struct AnalysisResult {
     }
 }
 
+// MARK: - Streaming Models
+
+struct ChatCompletionStreamResponse: Decodable {
+    let id: String
+    let object: String
+    let created: Int
+    let model: String
+    let choices: [StreamChoice]
+
+    struct StreamChoice: Decodable {
+        let index: Int
+        let delta: Delta
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case index
+            case delta
+            case finishReason = "finish_reason"
+        }
+
+        struct Delta: Decodable {
+            let role: String?
+            let content: String?
+        }
+    }
+}
+
+// MARK: - Streaming Support
+
+extension DeepSeekService {
+    /// 流式聊天完成请求
+    /// - Parameters:
+    ///   - messages: 消息数组
+    ///   - maxTokens: 最大token数
+    ///   - temperature: 温度参数
+    ///   - onChunk: 每收到一个数据块时的回调，返回累积的完整响应内容
+    ///   - onCompletion: 流式请求完成时的回调
+    func chatCompletionStream(
+        messages: [ChatMessage],
+        maxTokens: Int32? = nil,
+        temperature: Double = 0.7,
+        onChunk: @escaping (String) -> Void,
+        onCompletion: @escaping (Result<String, Error>) -> Void
+    ) {
+        guard let apiKey = apiKey else {
+            onCompletion(.failure(DeepSeekError.apiKeyNotConfigured))
+            return
+        }
+
+        let url = "\(baseURL)/chat/completions"
+        let headers: HTTPHeaders = [
+            "Authorization": "Bearer \(apiKey)",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream"
+        ]
+
+        let request = ChatCompletionRequest(
+            model: model,
+            messages: messages,
+            maxTokens: maxTokens ?? UserSettings.current.singleRequestLimit,
+            temperature: temperature,
+            stream: true
+        )
+
+        var accumulatedContent = ""
+
+        AF.streamRequest(url, method: .post, parameters: request, encoder: JSONParameterEncoder.default, headers: headers)
+            .validate()
+            .responseStream { [weak self] stream in
+                guard let self = self else { return }
+
+                switch stream.event {
+                case .stream(let result):
+                    switch result {
+                    case .success(let data):
+                        if let chunkString = String(data: data, encoding: .utf8) {
+                            self.processStreamChunk(chunkString, accumulatedContent: &accumulatedContent, onChunk: onChunk)
+                        }
+                    case .failure(let error):
+                        // todo@zpj
+                        break
+//                        onCompletion(.failure(self.handleError(error)))
+                    }
+
+                case .complete(let completion):
+                    if let error = completion.error {
+                        onCompletion(.failure(self.handleError(error)))
+                    } else {
+                        onCompletion(.success(accumulatedContent))
+                    }
+                }
+            }
+    }
+
+    /// 处理流式数据块
+    private func processStreamChunk(_ chunkString: String, accumulatedContent: inout String, onChunk: @escaping (String) -> Void) {
+        // 按行分割，处理SSE格式
+        let lines = chunkString.components(separatedBy: .newlines)
+
+        for line in lines {
+            guard line.hasPrefix("data: ") else { continue }
+
+            let jsonString = String(line.dropFirst(6)) // 移除"data: "前缀
+
+            // 如果是"[DONE]"消息，跳过
+            if jsonString.trimmingCharacters(in: .whitespacesAndNewlines) == "[DONE]" {
+                continue
+            }
+
+            guard let data = jsonString.data(using: .utf8) else { continue }
+
+            do {
+                let response = try JSONDecoder().decode(ChatCompletionStreamResponse.self, from: data)
+
+                // 提取内容增量
+                for choice in response.choices {
+                    if let content = choice.delta.content {
+                        accumulatedContent += content
+                        onChunk(accumulatedContent)
+                    }
+                }
+            } catch {
+                print("Failed to decode streaming chunk: \(error)")
+            }
+        }
+    }
+}
+
 // MARK: - Usage Tracking
 
 extension DeepSeekService {
@@ -451,7 +588,7 @@ extension DeepSeekService {
         return getUsagePercentage() >= Double(threshold)
     }
 
-    func hasSufficientTokens(for estimatedTokens: Int) -> Bool {
+    func hasSufficientTokens(for estimatedTokens: Int32) -> Bool {
         let remaining = getMonthlyLimit() - getMonthlyUsage()
         return remaining >= estimatedTokens
     }
@@ -463,7 +600,7 @@ extension DeepSeekService {
     func analyzeWithFallback(
         text: String,
         analysisType: AnalysisType,
-        maxTokens: Int? = nil
+        maxTokens: Int32? = nil
     ) async -> AnalysisResult {
         let settings = UserSettings.current
 

@@ -14,24 +14,62 @@ enum APIMode: String, CaseIterable {
 }
 
 @objc(UserSettings)
-public class UserSettings: NSManagedObject {
-    @NSManaged public var id: UUID
-    @NSManaged public var theme: String
-    @NSManaged public var apiMode: String
-    @NSManaged public var enableNotifications: Bool
-    @NSManaged public var enableAutoSave: Bool
-    @NSManaged public var enableCloudSync: Bool
-    @NSManaged public var deepSeekAPIKey: String?
-    @NSManaged public var deepSeekBaseURL: String?
-    @NSManaged public var deepSeekModel: String?
-    @NSManaged public var monthlyTokenLimit: Int32
-    @NSManaged public var singleRequestLimit: Int32
-    @NSManaged public var enableUsageAlert: Bool
-    @NSManaged public var usageAlertThreshold: Int32
-    @NSManaged public var enableAutoFallback: Bool
-    @NSManaged public var createdAt: Date
-    @NSManaged public var updatedAt: Date
+public class UserSettings: NSObject {
+    /*@NSManaged*/ public var id: UUID
+    /*@NSManaged*/ public var theme: String
+    /*@NSManaged*/ public var apiMode: String
+    /*@NSManaged*/ public var enableNotifications: Bool
+    /*@NSManaged*/ public var enableAutoSave: Bool
+    /*@NSManaged*/ public var enableCloudSync: Bool
+    /*@NSManaged*/ public var deepSeekAPIKey: String?
+    /*@NSManaged*/ public var deepSeekBaseURL: String?
+    /*@NSManaged*/ public var deepSeekModel: String?
+    /*@NSManaged*/ public var monthlyTokenLimit: Int32
+    /*@NSManaged*/ public var singleRequestLimit: Int32
+    /*@NSManaged*/ public var enableUsageAlert: Bool
+    /*@NSManaged*/ public var usageAlertThreshold: Int32
+    /*@NSManaged*/ public var enableAutoFallback: Bool
+    /*@NSManaged*/ public var createdAt: Date
+    /*@NSManaged*/ public var updatedAt: Date
 
+    init(id: UUID, theme: String, apiMode: String, enableNotifications: Bool, enableAutoSave: Bool, enableCloudSync: Bool, deepSeekAPIKey: String? = nil, deepSeekBaseURL: String? = nil, deepSeekModel: String? = nil, monthlyTokenLimit: Int32, singleRequestLimit: Int32, enableUsageAlert: Bool, usageAlertThreshold: Int32, enableAutoFallback: Bool, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.theme = theme
+        self.apiMode = apiMode
+        self.enableNotifications = enableNotifications
+        self.enableAutoSave = enableAutoSave
+        self.enableCloudSync = enableCloudSync
+        self.deepSeekAPIKey = deepSeekAPIKey
+        self.deepSeekBaseURL = deepSeekBaseURL
+        self.deepSeekModel = deepSeekModel
+        self.monthlyTokenLimit = monthlyTokenLimit
+        self.singleRequestLimit = singleRequestLimit
+        self.enableUsageAlert = enableUsageAlert
+        self.usageAlertThreshold = usageAlertThreshold
+        self.enableAutoFallback = enableAutoFallback
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+    
+    public override init() {
+        id = UUID()
+        theme = Theme.system.rawValue
+        apiMode = APIMode.auto.rawValue
+        enableNotifications = true
+        self.enableAutoSave = true
+        self.enableCloudSync = true
+        self.deepSeekAPIKey = "sk-94d840ecb62c4051af1d223524f7fc88"
+        self.deepSeekBaseURL = "https://api.deepseek.com"
+        self.deepSeekModel = "deepseek-chat"
+        self.monthlyTokenLimit = 10000
+        self.singleRequestLimit = 2000
+        self.enableUsageAlert = true
+        self.usageAlertThreshold = 80
+        self.enableAutoFallback = true
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+    
     var userTheme: Theme {
         get { Theme(rawValue: theme) ?? .system }
         set { theme = newValue.rawValue }
@@ -117,35 +155,35 @@ public class UserSettings: NSManagedObject {
 }
 
 extension UserSettings {
-    @nonobjc public class func fetchRequest() -> NSFetchRequest<UserSettings> {
-        return NSFetchRequest<UserSettings>(entityName: "UserSettings")
-    }
+//    @nonobjc public class func fetchRequest() -> NSFetchRequest<UserSettings> {
+//        return NSFetchRequest<UserSettings>(entityName: "UserSettings")
+//    }
 
     static var current: UserSettings {
-        let request: NSFetchRequest<UserSettings> = UserSettings.fetchRequest()
-        request.fetchLimit = 1
-
-        do {
-            if let settings = try CoreDataStack.shared.context.fetch(request).first {
-                return settings
-            }
-        } catch {
-            print("Failed to fetch user settings: \(error)")
-        }
+//        let request: NSFetchRequest<UserSettings> = UserSettings.fetchRequest()
+//        request.fetchLimit = 1
+//
+//        do {
+//            if let settings = try CoreDataStack.shared.context.fetch(request).first {
+//                return settings
+//            }
+//        } catch {
+//            print("Failed to fetch user settings: \(error)")
+//        }
 
         // 创建默认设置
         return createDefaultSettings()
     }
 
     private static func createDefaultSettings() -> UserSettings {
-        let settings = UserSettings(context: CoreDataStack.shared.context)
+        let settings = UserSettings()
         settings.id = UUID()
         settings.userTheme = .system
         settings.userAPIMode = .auto
         settings.enableNotifications = true
         settings.enableAutoSave = true
         settings.enableCloudSync = false
-        settings.deepSeekAPIKey = nil
+        settings.deepSeekAPIKey = "sk-94d840ecb62c4051af1d223524f7fc88"
         settings.deepSeekBaseURL = "https://api.deepseek.com"
         settings.deepSeekModel = "deepseek-chat"
         settings.monthlyTokenLimit = 10000
@@ -156,26 +194,26 @@ extension UserSettings {
         settings.createdAt = Date()
         settings.updatedAt = Date()
 
-        CoreDataStack.shared.saveContext()
+//        CoreDataStack.shared.saveContext()
 
         return settings
     }
 
-    static func resetToDefaults() {
-        let request: NSFetchRequest<UserSettings> = UserSettings.fetchRequest()
-
-        do {
-            let allSettings = try CoreDataStack.shared.context.fetch(request)
-            for settings in allSettings {
-                CoreDataStack.shared.context.delete(settings)
-            }
-
-            // 创建新的默认设置
-            _ = createDefaultSettings()
-        } catch {
-            print("Failed to reset user settings: \(error)")
-        }
-    }
+//    static func resetToDefaults() {
+//        let request: NSFetchRequest<UserSettings> = UserSettings.fetchRequest()
+//
+//        do {
+//            let allSettings = try CoreDataStack.shared.context.fetch(request)
+//            for settings in allSettings {
+//                CoreDataStack.shared.context.delete(settings)
+//            }
+//
+//            // 创建新的默认设置
+//            _ = createDefaultSettings()
+//        } catch {
+//            print("Failed to reset user settings: \(error)")
+//        }
+//    }
 
     func isDeepSeekConfigured() -> Bool {
         return deepSeekAPIKey?.isEmpty == false
