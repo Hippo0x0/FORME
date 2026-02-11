@@ -2,8 +2,8 @@ name: FORME
 options:
   bundleIdPrefix: com.forme
   deploymentTarget:
-    iOS: 15.0
-  xcodeVersion: 15.0
+    iOS: 17.0
+  xcodeVersion: 17.0
   groupSortPosition: top
   generateEmptyDirectories: true
   createIntermediateGroups: true
@@ -24,6 +24,10 @@ packages:
   LookinServer:
     url: https://github.com/QMUI/LookinServer/
     majorVersion: 1.2.8
+  AnyLanguageModel:
+    url: https://github.com/mattt/AnyLanguageModel.git
+    from: 0.5.0
+    traits: ["CoreML", "MLX"]
 
 targets:
   FORME:
@@ -55,6 +59,7 @@ targets:
       - package: Markdown
         # product: swift-markdown
       - package: LookinServer
+      - package: AnyLanguageModel
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.forme.app
