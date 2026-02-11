@@ -28,27 +28,6 @@ class HomeViewController: UIViewController {
       removeKeyboardObservers()
     }
 
-    private let existingResearchLabel: UILabel = {
-        let label = UILabel()
-        label.text = "已有研究"
-        label.font = UIFont.systemFont(ofSize: 20, weight: .bold)
-        label.textColor = .label
-        return label
-    }()
-
-    private let researchCollectionView: UICollectionView = {
-        let layout = UICollectionViewFlowLayout()
-        layout.scrollDirection = .horizontal
-        layout.minimumLineSpacing = 12
-        layout.minimumInteritemSpacing = 12
-        layout.sectionInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
-
-        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.register(ResearchCell.self, forCellWithReuseIdentifier: "ResearchCell")
-        collectionView.backgroundColor = .clear
-        collectionView.showsHorizontalScrollIndicator = false
-        return collectionView
-    }()
 
     private let conversationContainerView: UIView = {
         let view = UIView()
@@ -115,14 +94,6 @@ class HomeViewController: UIViewController {
         return label
     }()
 
-    private var researchItems: [ResearchItem] = [
-        ResearchItem(title: "心理学", color: UIColor(red: 0.91, green: 0.29, blue: 0.24, alpha: 1.0)),
-        ResearchItem(title: "投资", color: UIColor(red: 0.20, green: 0.60, blue: 0.86, alpha: 1.0)),
-        ResearchItem(title: "技能", color: UIColor(red: 0.15, green: 0.68, blue: 0.38, alpha: 1.0)),
-        ResearchItem(title: "财务", color: UIColor(red: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)),
-        ResearchItem(title: "人生", color: UIColor(red: 0.61, green: 0.35, blue: 0.71, alpha: 1.0)),
-        ResearchItem(title: "健康", color: UIColor(red: 0.98, green: 0.50, blue: 0.45, alpha: 1.0))
-    ]
 
     private var messages: [Message] = [
         Message(
@@ -158,8 +129,6 @@ class HomeViewController: UIViewController {
         view.backgroundColor = .systemBackground
         navigationItem.title = "首页"
 
-        view.addSubview(existingResearchLabel)
-        view.addSubview(researchCollectionView)
         view.addSubview(conversationContainerView)
 
         conversationContainerView.addSubview(conversationTitleLabel)
@@ -170,8 +139,6 @@ class HomeViewController: UIViewController {
         inputContainerView.addSubview(inputTextView)
         inputContainerView.addSubview(sendButton)
 
-        researchCollectionView.delegate = self
-        researchCollectionView.dataSource = self
 
         conversationScrollView.delegate = self
         conversationScrollView.dataSource = self
@@ -181,19 +148,8 @@ class HomeViewController: UIViewController {
     }
 
     private func setupConstraints() {
-        existingResearchLabel.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
-            make.leading.trailing.equalToSuperview().inset(20)
-        }
-
-        researchCollectionView.snp.makeConstraints { make in
-            make.top.equalTo(existingResearchLabel.snp.bottom).offset(12)
-            make.leading.trailing.equalToSuperview()
-            make.height.equalTo(100)
-        }
-
         conversationContainerView.snp.makeConstraints { make in
-            make.top.equalTo(researchCollectionView.snp.bottom).offset(20)
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(inputContainerView.snp.top)
         }
@@ -483,7 +439,7 @@ class HomeViewController: UIViewController {
             }
 
             self.conversationContainerView.snp.remakeConstraints { make in
-                make.top.equalTo(self.researchCollectionView.snp.bottom).offset(20)
+                make.top.equalTo(self.view.safeAreaLayoutGuide).offset(20)
                 make.leading.trailing.equalToSuperview()
                 make.bottom.equalTo(self.inputContainerView.snp.top)
             }
@@ -510,7 +466,7 @@ class HomeViewController: UIViewController {
             }
 
             self.conversationContainerView.snp.remakeConstraints { make in
-                make.top.equalTo(self.researchCollectionView.snp.bottom).offset(20)
+                make.top.equalTo(self.view.safeAreaLayoutGuide).offset(20)
                 make.leading.trailing.equalToSuperview()
                 make.bottom.equalTo(self.inputContainerView.snp.top)
             }
@@ -522,54 +478,30 @@ class HomeViewController: UIViewController {
 
 extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        if collectionView == researchCollectionView {
-            return researchItems.count
-        } else { // conversationScrollView (messages collection view)
-            return messages.count
-        }
+        return messages.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        if collectionView == researchCollectionView {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ResearchCell", for: indexPath) as! ResearchCell
-            let item = researchItems[indexPath.item]
-            cell.configure(with: item.title, color: item.color)
-            return cell
-        } else { // conversationScrollView (messages collection view)
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "MessageCell", for: indexPath) as! MessageCollectionViewCell
-            let message = messages[indexPath.item]
-            cell.configure(with: message)
-            return cell
-        }
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "MessageCell", for: indexPath) as! MessageCollectionViewCell
+        let message = messages[indexPath.item]
+        cell.configure(with: message)
+        return cell
     }
 
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        if collectionView == researchCollectionView {
-            return CGSize(width: 64, height: 64)
-        } else { // conversationScrollView (messages collection view)
-            let message = messages[indexPath.item]
-            let maxWidth: CGFloat = collectionView.frame.width - 32 // 左右各16点边距
-            let bubbleMaxWidth: CGFloat = message.isUser ? 320 : 360
-            let contentWidth: CGFloat = min(maxWidth, bubbleMaxWidth) - 24 // 减去气泡内边距（12+12）
+        let message = messages[indexPath.item]
+        let maxWidth: CGFloat = collectionView.frame.width - 32 // 左右各16点边距
+        let bubbleMaxWidth: CGFloat = message.isUser ? 320 : 360
+        let contentWidth: CGFloat = min(maxWidth, bubbleMaxWidth) - 24 // 减去气泡内边距（12+12）
 
-            // 计算内容高度
-            let contentView = MessageContentView(message: message)
-            let estimatedSize = contentView.sizeThatFits(CGSize(width: contentWidth, height: .greatestFiniteMagnitude))
+        // 计算内容高度
+        let contentView = MessageContentView(message: message)
+        let estimatedSize = contentView.sizeThatFits(CGSize(width: contentWidth, height: .greatestFiniteMagnitude))
 
-            return CGSize(width: collectionView.frame.width, height: estimatedSize.height + 24) // 加上气泡内边距（12+12）
-        }
+        return CGSize(width: collectionView.frame.width, height: estimatedSize.height + 24) // 加上气泡内边距（12+12）
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        if collectionView == researchCollectionView {
-            let item = researchItems[indexPath.item]
-            let alert = UIAlertController(title: "开始研究", message: "是否开始研究：\(item.title)", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-            alert.addAction(UIAlertAction(title: "开始", style: .default) { _ in
-                // TODO: 跳转到具体研究
-            })
-            present(alert, animated: true)
-        }
         // 消息集合视图不需要选择处理
     }
 }
@@ -595,54 +527,6 @@ extension HomeViewController: UITextViewDelegate {
     }
 }
 
-class ResearchCell: UICollectionViewCell {
-    private let containerView: UIView = {
-        let view = UIView()
-        view.layer.cornerRadius = 12
-        view.layer.masksToBounds = true
-        return view
-    }()
-
-    private let titleLabel: UILabel = {
-        let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .white
-        label.textAlignment = .center
-        label.numberOfLines = 2
-        return label
-    }()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setupUI()
-        setupConstraints()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    private func setupUI() {
-        contentView.addSubview(containerView)
-        containerView.addSubview(titleLabel)
-    }
-
-    private func setupConstraints() {
-        containerView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-
-        titleLabel.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.leading.trailing.equalToSuperview().inset(4)
-        }
-    }
-
-    func configure(with title: String, color: UIColor) {
-        titleLabel.text = title
-        containerView.backgroundColor = color
-    }
-}
 
 class MessageCollectionViewCell: UICollectionViewCell {
     private var message: Message?
