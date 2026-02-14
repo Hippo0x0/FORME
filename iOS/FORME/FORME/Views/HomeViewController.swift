@@ -35,14 +35,6 @@ class HomeViewController: UIViewController {
         return view
     }()
 
-    private let conversationTitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "研究对话"
-        label.font = UIFont.systemFont(ofSize: 20, weight: .bold)
-        label.textColor = .label
-        return label
-    }()
-
     private let conversationScrollView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .vertical
@@ -54,6 +46,7 @@ class HomeViewController: UIViewController {
         collectionView.alwaysBounceVertical = true
         collectionView.backgroundColor = .clear
         collectionView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 0)
+        collectionView.translatesAutoresizingMaskIntoConstraints = true
         return collectionView
     }()
 
@@ -130,15 +123,12 @@ class HomeViewController: UIViewController {
         navigationItem.title = "首页"
 
         view.addSubview(conversationContainerView)
-
-        conversationContainerView.addSubview(conversationTitleLabel)
         conversationContainerView.addSubview(conversationScrollView)
         conversationContainerView.addSubview(emptyConversationLabel)
-
-        view.addSubview(inputContainerView)
+        conversationContainerView.addSubview(inputContainerView)
+        
         inputContainerView.addSubview(inputTextView)
         inputContainerView.addSubview(sendButton)
-
 
         conversationScrollView.delegate = self
         conversationScrollView.dataSource = self
@@ -149,21 +139,15 @@ class HomeViewController: UIViewController {
 
     private func setupConstraints() {
         conversationContainerView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(20)
+            make.top.equalTo(view.safeAreaLayoutGuide.snp.top)
             make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(inputContainerView.snp.top)
-        }
-
-        conversationTitleLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(16)
-            make.leading.trailing.equalToSuperview().inset(20)
+            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom)
         }
 
         conversationScrollView.snp.makeConstraints { make in
-            make.top.equalTo(conversationTitleLabel.snp.bottom).offset(12)
-            make.leading.trailing.bottom.equalToSuperview()
+            make.top.equalToSuperview()
+            make.leading.trailing.equalToSuperview()
         }
-
 
         emptyConversationLabel.snp.makeConstraints { make in
             make.center.equalTo(conversationScrollView)
@@ -171,21 +155,23 @@ class HomeViewController: UIViewController {
         }
 
         inputContainerView.snp.makeConstraints { make in
+            make.top.equalTo(conversationScrollView.snp.bottom).priority(.high)
             make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(view.safeAreaLayoutGuide)
-            make.height.greaterThanOrEqualTo(50)
+            make.bottom.equalToSuperview().priority(.high)
+            make.height.equalTo(50)
         }
 
         inputTextView.snp.makeConstraints { make in
-            make.top.leading.bottom.equalToSuperview()
+            make.leading.equalToSuperview()
+            make.centerY.equalToSuperview()
             make.trailing.equalTo(sendButton.snp.leading).offset(-8)
-            make.height.greaterThanOrEqualTo(50)
+            make.height.equalTo(50)
         }
 
         sendButton.snp.makeConstraints { make in
+            make.centerY.equalToSuperview()
             make.trailing.equalToSuperview().offset(-12)
-            make.bottom.equalToSuperview().offset(-12)
-            make.width.height.equalTo(32)
+            make.width.height.equalTo(50)
         }
     }
 
@@ -193,9 +179,24 @@ class HomeViewController: UIViewController {
         sendButton.addTarget(self, action: #selector(sendButtonTapped), for: .touchUpInside)
     }
 
+    // reloadAll
     private func loadConversation() {
         emptyConversationLabel.isHidden = !messages.isEmpty
+        // todo 这里应该不是reloadData, 应该是更新特定一个cell
         conversationScrollView.reloadData()
+
+        DispatchQueue.main.async {
+            self.scrollToBottom()
+        }
+    }
+    // reload specify conversation
+    private func loadConversation(messageId: String, content: String) {
+        if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
+            self.messages[index].content = content
+            conversationScrollView.reloadData()
+            // 用这个，刷新的很慢，可能是index有不同, todo@zpj
+            // self.conversationScrollView.reloadItems(at: [.init(item: index, section: 0)])
+        }
 
         DispatchQueue.main.async {
             self.scrollToBottom()
@@ -248,7 +249,7 @@ class HomeViewController: UIViewController {
     private func scrollToBottom() {
         guard !messages.isEmpty else { return }
         let lastIndexPath = IndexPath(item: messages.count - 1, section: 0)
-        conversationScrollView.scrollToItem(at: lastIndexPath, at: .bottom, animated: true)
+        conversationScrollView.scrollToItem(at: lastIndexPath, at: .bottom, animated: false)
     }
 
     @objc private func sendButtonTapped() {
@@ -312,12 +313,10 @@ class HomeViewController: UIViewController {
             temperature: 0.7,
             onChunk: { [weak self] accumulatedContent in
                 guard let self = self else { return }
-
                 // 更新AI消息内容
-                DispatchQueue.main.async {
-                    if let index = self.messages.firstIndex(where: { $0.id == aiMessageId }) {
-                        self.messages[index].content = accumulatedContent
-                        self.loadConversation()
+                DispatchQueue.main.async { [weak self] in
+                    if let self = self {
+                        self.loadConversation(messageId: aiMessageId, content: accumulatedContent)
                     }
                 }
             },
@@ -422,57 +421,26 @@ class HomeViewController: UIViewController {
 
     @objc private func keyboardWillShow(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
-              let keyboardFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-              let animationDuration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval,
-              let animationCurveRaw = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt else {
-            return
+              let keyboardFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        
+        self.conversationContainerView.snp.remakeConstraints { make in
+            make.top.equalTo(self.view.safeAreaLayoutGuide.snp.top)
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalToSuperview().offset(-keyboardFrame.height)
         }
-
-        let animationCurve = UIView.AnimationOptions(rawValue: animationCurveRaw << 16)
-        let keyboardHeight = keyboardFrame.height
-
-        UIView.animate(withDuration: animationDuration, delay: 0, options: animationCurve, animations: {
-            self.inputContainerView.snp.remakeConstraints { make in
-                make.leading.trailing.equalToSuperview()
-                make.bottom.equalToSuperview().offset(-keyboardHeight)
-                make.height.greaterThanOrEqualTo(50)
-            }
-
-            self.conversationContainerView.snp.remakeConstraints { make in
-                make.top.equalTo(self.view.safeAreaLayoutGuide).offset(20)
-                make.leading.trailing.equalToSuperview()
-                make.bottom.equalTo(self.inputContainerView.snp.top)
-            }
-
-            self.view.layoutIfNeeded()
-            self.scrollToBottom()
-        })
+        self.view.layoutIfNeeded()
+        self.scrollToBottom()
     }
 
     @objc private func keyboardWillHide(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let animationDuration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval,
-              let animationCurveRaw = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt else {
-            return
+
+        self.conversationContainerView.snp.remakeConstraints { make in
+            make.top.equalTo(self.view.safeAreaLayoutGuide.snp.top)
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(self.view.safeAreaLayoutGuide.snp.bottom)
         }
-
-        let animationCurve = UIView.AnimationOptions(rawValue: animationCurveRaw << 16)
-
-        UIView.animate(withDuration: animationDuration, delay: 0, options: animationCurve, animations: {
-            self.inputContainerView.snp.remakeConstraints { make in
-                make.leading.trailing.equalToSuperview()
-                make.bottom.equalTo(self.view.safeAreaLayoutGuide)
-                make.height.greaterThanOrEqualTo(50)
-            }
-
-            self.conversationContainerView.snp.remakeConstraints { make in
-                make.top.equalTo(self.view.safeAreaLayoutGuide).offset(20)
-                make.leading.trailing.equalToSuperview()
-                make.bottom.equalTo(self.inputContainerView.snp.top)
-            }
-
-            self.view.layoutIfNeeded()
-        })
+        self.view.layoutIfNeeded()
+        self.scrollToBottom()
     }
 }
 
