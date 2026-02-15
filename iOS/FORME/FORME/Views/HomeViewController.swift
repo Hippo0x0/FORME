@@ -22,6 +22,18 @@ class Message {
     }
 }
 
+class ConversationContainerView: UIView {
+    var useDraging: Bool = false
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
 class HomeViewController: UIViewController {
   
     deinit {
@@ -29,13 +41,13 @@ class HomeViewController: UIViewController {
     }
 
 
-    private let conversationContainerView: UIView = {
-        let view = UIView()
+    private let conversationContainerView: ConversationContainerView = {
+        let view = ConversationContainerView()
         view.backgroundColor = .systemBackground
         return view
     }()
 
-    private let conversationScrollView: UICollectionView = {
+    private let collectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .vertical
         layout.minimumLineSpacing = 16
@@ -65,7 +77,7 @@ class HomeViewController: UIViewController {
         textView.backgroundColor = .clear
         textView.isScrollEnabled = false
         textView.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
-        textView.placeholder = "输入您的研究问题..."
+        textView.placeholderLabel?.text = "发消息或按住说话"
         return textView
     }()
 
@@ -118,21 +130,23 @@ class HomeViewController: UIViewController {
         loadConversation()
     }
 
+    
+    // MARK: setup
     private func setupUI() {
         view.backgroundColor = .systemBackground
         navigationItem.title = "首页"
 
         view.addSubview(conversationContainerView)
-        conversationContainerView.addSubview(conversationScrollView)
+        conversationContainerView.addSubview(collectionView)
         conversationContainerView.addSubview(emptyConversationLabel)
         conversationContainerView.addSubview(inputContainerView)
         
         inputContainerView.addSubview(inputTextView)
         inputContainerView.addSubview(sendButton)
 
-        conversationScrollView.delegate = self
-        conversationScrollView.dataSource = self
-        conversationScrollView.register(MessageCollectionViewCell.self, forCellWithReuseIdentifier: "MessageCell")
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        collectionView.register(MessageCollectionViewCell.self, forCellWithReuseIdentifier: "MessageCell")
 
         inputTextView.delegate = self
     }
@@ -144,18 +158,18 @@ class HomeViewController: UIViewController {
             make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom)
         }
 
-        conversationScrollView.snp.makeConstraints { make in
+        collectionView.snp.makeConstraints { make in
             make.top.equalToSuperview()
             make.leading.trailing.equalToSuperview()
         }
 
         emptyConversationLabel.snp.makeConstraints { make in
-            make.center.equalTo(conversationScrollView)
+            make.center.equalTo(collectionView)
             make.leading.trailing.equalToSuperview().inset(40)
         }
 
         inputContainerView.snp.makeConstraints { make in
-            make.top.equalTo(conversationScrollView.snp.bottom).priority(.high)
+            make.top.equalTo(collectionView.snp.bottom).priority(.high)
             make.leading.trailing.equalToSuperview()
             make.bottom.equalToSuperview().priority(.high)
             make.height.equalTo(50)
@@ -182,8 +196,11 @@ class HomeViewController: UIViewController {
     // reloadAll
     private func loadConversation() {
         emptyConversationLabel.isHidden = !messages.isEmpty
-        // todo 这里应该不是reloadData, 应该是更新特定一个cell
-        conversationScrollView.reloadData()
+        // 用户操作的时候，不更新UI
+        guard !conversationContainerView.useDraging else {
+            return
+        }
+        collectionView.reloadData()
 
         DispatchQueue.main.async {
             self.scrollToBottom()
@@ -193,9 +210,9 @@ class HomeViewController: UIViewController {
     private func loadConversation(messageId: String, content: String) {
         if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
             self.messages[index].content = content
-            conversationScrollView.reloadData()
+            collectionView.reloadData()
             // 用这个，刷新的很慢，可能是index有不同, todo@zpj
-            // self.conversationScrollView.reloadItems(at: [.init(item: index, section: 0)])
+            // self.collectionView.reloadItems(at: [.init(item: index, section: 0)])
         }
 
         DispatchQueue.main.async {
@@ -203,53 +220,13 @@ class HomeViewController: UIViewController {
         }
     }
 
-    private func createMessageView(message: Message) -> UIView {
-        let containerView = UIView()
-
-        let bubbleView = UIView()
-        bubbleView.layer.cornerRadius = 12
-        bubbleView.layer.masksToBounds = true
-
-        if message.isUser {
-            bubbleView.backgroundColor = UIColor(red: 0.07, green: 0.21, blue: 0.36, alpha: 1.0)
-        } else {
-            bubbleView.backgroundColor = .secondarySystemBackground
-        }
-
-        let contentView = MessageContentView(message: message)
-
-        containerView.addSubview(bubbleView)
-        bubbleView.addSubview(contentView)
-
-        if message.isUser {
-            bubbleView.snp.makeConstraints { make in
-                make.trailing.equalToSuperview().offset(-8)
-                make.top.bottom.equalToSuperview()
-                make.width.lessThanOrEqualTo(320)
-            }
-
-            contentView.snp.makeConstraints { make in
-                make.edges.equalToSuperview().inset(12)
-            }
-        } else {
-            bubbleView.snp.makeConstraints { make in
-                make.leading.equalToSuperview().offset(8)
-                make.top.bottom.equalToSuperview()
-                make.width.lessThanOrEqualTo(360)
-            }
-
-            contentView.snp.makeConstraints { make in
-                make.edges.equalToSuperview().inset(12)
-            }
-        }
-
-        return containerView
-    }
-
+    // MARK: ScrollToBottom
     private func scrollToBottom() {
         guard !messages.isEmpty else { return }
+        // 用户滑动的时候, 不滑动到底部
+        guard !conversationContainerView.useDraging else { return }
         let lastIndexPath = IndexPath(item: messages.count - 1, section: 0)
-        conversationScrollView.scrollToItem(at: lastIndexPath, at: .bottom, animated: false)
+        collectionView.scrollToItem(at: lastIndexPath, at: .bottom, animated: false)
     }
 
     @objc private func sendButtonTapped() {
@@ -264,6 +241,8 @@ class HomeViewController: UIViewController {
             timestamp: Date()
         )
         messages.append(userMessage)
+        
+        // 恢复视图状态
         inputTextView.text = ""
 
         // 添加AI消息占位符（显示正在输入）
@@ -376,6 +355,7 @@ class HomeViewController: UIViewController {
         return result.content
     }
 
+    
     private func generateFallbackResponse(to question: String) async -> String {
         // 使用本地分析服务作为回退
         let localService = LocalAnalysisService.shared
@@ -394,7 +374,7 @@ class HomeViewController: UIViewController {
 
         return result.content
     }
-
+    // MARK: KeyBorad
     private func setupKeyboardObservers() {
         NotificationCenter.default.addObserver(
             self,
@@ -444,6 +424,7 @@ class HomeViewController: UIViewController {
     }
 }
 
+// MARK: UIColleciton View Delegate -
 extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return messages.count
@@ -474,16 +455,21 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
     }
 }
 
-extension HomeViewController: UITextViewDelegate {
-    func textViewDidChange(_ textView: UITextView) {
-        let size = CGSize(width: textView.frame.width, height: .infinity)
-        let estimatedSize = textView.sizeThatFits(size)
+// MARK: UIScrollViewDelegate
+extension HomeViewController: UIScrollViewDelegate {
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        conversationContainerView.useDraging = true
+    }
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        conversationContainerView.useDraging = false
+    }
+}
 
-        textView.constraints.forEach { constraint in
-            if constraint.firstAttribute == .height {
-                constraint.constant = max(50, estimatedSize.height)
-            }
-        }
+// MARK: UITextViewDelegate
+extension HomeViewController: UITextViewDelegate {
+    
+    func textViewDidChange(_ textView: UITextView) {
+        textView.updatePlaceholder()
     }
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
@@ -529,9 +515,9 @@ class MessageCollectionViewCell: UICollectionViewCell {
 
         // 设置气泡颜色
         if message.isUser {
-            bubbleView.backgroundColor = UIColor(red: 0.07, green: 0.21, blue: 0.36, alpha: 1.0)
+            bubbleView.backgroundColor = .secondarySystemBackground //UIColor(red: 0.07, green: 0.21, blue: 0.36, alpha: 1.0)
         } else {
-            bubbleView.backgroundColor = .secondarySystemBackground
+            bubbleView.backgroundColor = .systemBackground
         }
 
         // 设置约束
@@ -541,14 +527,19 @@ class MessageCollectionViewCell: UICollectionViewCell {
                 make.width.lessThanOrEqualTo(320)
             } else {
                 make.leading.equalToSuperview().offset(8)
-                make.width.lessThanOrEqualTo(360)
+                make.width.lessThanOrEqualTo(380)
             }
             make.top.bottom.equalToSuperview()
             make.height.greaterThanOrEqualTo(50)
         }
 
         newContentView.snp.remakeConstraints { make in
-            make.edges.equalToSuperview().inset(12)
+            if message.isUser {
+                make.edges.equalToSuperview().inset(12)
+            } else {
+                make.edges.equalToSuperview().inset(4)
+            }
+            
         }
     }
 }
@@ -576,8 +567,7 @@ class MessageContentView: UIView {
         contentTextView.contentInset = .zero
         contentTextView.isSelectable = true
         contentTextView.dataDetectorTypes = .link
-        contentTextView.textColor = message.isUser ? .white : .label
-//        contentTextView.textAlignment = message.isUser ? .right : .left
+        contentTextView.textColor = .label
 
         updateContentLabel()
 
@@ -598,8 +588,6 @@ class MessageContentView: UIView {
     }
 
     private func parseMarkdown(_ text: String, isUser: Bool) -> NSAttributedString? {
-        let baseColor = isUser ? UIColor.white : UIColor.label
-        let baseFont = UIFont.systemFont(ofSize: 16)
 
         // 使用cmark-gfm解析Markdown为HTML
         guard let html = markdownToHTML(text) else {
@@ -625,8 +613,8 @@ class MessageContentView: UIView {
     }
 
     private func parseHTML(_ html: String, isUser: Bool) -> NSAttributedString {
-        let baseColor = isUser ? UIColor.white : UIColor.label
-        let baseFont = UIFont.systemFont(ofSize: 16)
+        let baseColor = isUser ? .label : UIColor.label
+        let baseFont = UIFont.systemFont(ofSize: 18)
 
         guard let data = html.data(using: .utf8) else {
             return NSAttributedString(
@@ -676,66 +664,44 @@ class MessageContentView: UIView {
 
 extension UITextView {
     private struct AssociatedKeys {
-        static var placeholderLabel = "placeholderLabel"
+        static var placeholderkey: Int = 0
     }
 
-    var placeholder: String? {
+    var placeholderLabel: UILabel? {
         get {
-            return objc_getAssociatedObject(self, &AssociatedKeys.placeholderLabel) as? String
+            let placeholderLabel: UILabel
+            if let existingLabel = objc_getAssociatedObject(self, &AssociatedKeys.placeholderkey) as? UILabel {
+                placeholderLabel = existingLabel
+            } else {
+                placeholderLabel = UILabel()
+                placeholderLabel.textColor = .placeholderText
+                placeholderLabel.font = self.font
+                placeholderLabel.numberOfLines = 0
+                addSubview(placeholderLabel)
+                objc_setAssociatedObject(self, &AssociatedKeys.placeholderkey, placeholderLabel, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+                
+                placeholderLabel.snp.makeConstraints { make in
+                    make.top.equalToSuperview().offset(textContainerInset.top)
+                    make.leading.equalToSuperview().offset(textContainerInset.left + 4)
+                    make.trailing.equalToSuperview().offset(-textContainerInset.right)
+                }
+            }
+            return placeholderLabel
         }
         set {
-            objc_setAssociatedObject(self, &AssociatedKeys.placeholderLabel, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            objc_setAssociatedObject(self, &AssociatedKeys.placeholderkey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
             updatePlaceholder()
         }
     }
 
-    private func updatePlaceholder() {
-        guard let placeholder = placeholder else { return }
-
-        let placeholderLabel: UILabel
-        if let existingLabel = objc_getAssociatedObject(self, &AssociatedKeys.placeholderLabel) as? UILabel {
-            placeholderLabel = existingLabel
-        } else {
-            placeholderLabel = UILabel()
-            placeholderLabel.textColor = .placeholderText
-            placeholderLabel.font = self.font
-            placeholderLabel.numberOfLines = 0
-            addSubview(placeholderLabel)
-            objc_setAssociatedObject(self, &AssociatedKeys.placeholderLabel, placeholderLabel, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        }
-
-        placeholderLabel.text = placeholder
-        placeholderLabel.isHidden = !text.isEmpty
-
-        placeholderLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(textContainerInset.top)
-            make.leading.equalToSuperview().offset(textContainerInset.left + 4)
-            make.trailing.equalToSuperview().offset(-textContainerInset.right)
-        }
-    }
-
-    @objc private func textViewDidChange() {
-        (objc_getAssociatedObject(self, &AssociatedKeys.placeholderLabel) as? UILabel)?.isHidden = !text.isEmpty
-    }
-
-    static func swizzleTextView() {
-        let originalSelector = #selector(setter: UITextView.text)
-        let swizzledSelector = #selector(UITextView.swizzled_setText(_:))
-
-        guard let originalMethod = class_getInstanceMethod(UITextView.self, originalSelector),
-              let swizzledMethod = class_getInstanceMethod(UITextView.self, swizzledSelector) else { return }
-
-        method_exchangeImplementations(originalMethod, swizzledMethod)
-    }
-
-    @objc private func swizzled_setText(_ text: String) {
-        self.swizzled_setText(text)
-        updatePlaceholder()
+    public func updatePlaceholder() {
+        placeholderLabel?.isHidden = !text.isEmpty
     }
 }
 
+// MARK: Markdownosaur
 public struct Markdownosaur: MarkupVisitor {
-    let baseFontSize: CGFloat = 15.0
+    let baseFontSize: CGFloat = 16.0
 
     public init() {}
     
