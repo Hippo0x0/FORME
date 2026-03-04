@@ -48,8 +48,16 @@ class MainTabBarController: UITabBarController {
             image: UIImage(systemName: "person.fill"),
             selectedImage: UIImage(systemName: "person.fill")
         )
+        
+        let webviewVC = WebViewDemoViewController()
+        let webviewNav = UINavigationController(rootViewController: webviewVC)
+        webviewNav.tabBarItem = UITabBarItem(
+            title: "Web",
+            image: UIImage(systemName: "person.fill"),
+            selectedImage: UIImage(systemName: "person.fill")
+        )
 
-        viewControllers = [homeNav, researchNav, libraryNav, analysisNav, profileNav]
+        viewControllers = [homeNav, webviewNav, researchNav, libraryNav, analysisNav, profileNav]
     }
 
     private func setupTabBar() {
